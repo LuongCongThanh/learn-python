@@ -1,0 +1,60 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "back": "Back",
+    "viewAll": "View all"
+  },
+  "auth": {
+    "login": "Sign In",
+    "register": "Create Account",
+    "logout": "Sign Out",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot Password?",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?"
+  },
+  "product": {
+    "addToCart": "Add to Cart",
+    "buyNow": "Buy Now",
+    "outOfStock": "Out of Stock",
+    "inStock": "In Stock",
+    "lowStock": "{count} left in stock",
+    "price": "Price",
+    "category": "Category",
+    "description": "Description"
+  },
+  "cart": {
+    "title": "Shopping Cart",
+    "empty": "Your cart is empty",
+    "total": "Total",
+    "checkout": "Proceed to Checkout",
+    "remove": "Remove",
+    "quantity": "Qty"
+  },
+  "order": {
+    "title": "Orders",
+    "myOrders": "My Orders",
+    "orderCode": "Order #",
+    "status": "Status",
+    "total": "Total",
+    "cancel": "Cancel Order",
+    "success": "Order placed successfully!",
+    "detail": "Order Details"
+  },
+  "payment": {
+    "method": "Payment Method",
+    "cod": "Cash on Delivery",
+    "vnpay": "VNPay",
+    "momo": "MoMo Wallet",
+    "zalopay": "ZaloPay"
+  }
+}

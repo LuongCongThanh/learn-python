@@ -37,7 +37,7 @@
 | **Backend**        | Django 5.1 + Django REST Framework       | Admin panel sẵn → tiết kiệm 60–70% thời gian |
 | **Database**       | PostgreSQL (Neon — managed, free tier)   | Không cần cài local, có dashboard            |
 | **Auth**           | django-allauth + SimpleJWT               | Social login Google/Facebook, refresh token  |
-| **Payment**        | VNPay API (tích hợp trực tiếp theo docs) | Docs chính thức rõ ràng, sandbox miễn phí    |
+| **Payment**        | COD (tiền mặt khi nhận hàng)             | Không cần bên thứ ba — Phase 2 thêm VNPAY/Momo          |
 | **Media Storage**  | Cloudinary (free 25GB)                   | CDN sẵn, resize ảnh auto, không cần tự host  |
 | **Email**          | Django SMTP (Gmail / Mailgun free)       | Gửi xác nhận đơn hàng                        |
 | **Testing**        | pytest-django + Playwright               | Unit test backend, E2E test luồng mua hàng   |
@@ -61,26 +61,31 @@
 ## MVP Scope — Chỉ làm những cái này
 
 ### Phía khách hàng
+
 - [ ] Đăng ký / Đăng nhập / Quên mật khẩu
 - [ ] Trang chủ + Danh mục + Tìm kiếm + Lọc cơ bản
 - [ ] Trang chi tiết sản phẩm (SSR + SEO)
-- [ ] Giỏ hàng (add / remove / update)
-- [ ] Checkout + Thanh toán VNPAY sandbox
+- [ ] Giỏ hàng (add / remove / update) — lưu localStorage, mất khi đổi thiết bị
+- [ ] Checkout + Thanh toán COD
 - [ ] Trang xác nhận đơn + Email thông báo
 - [ ] Xem đơn hàng của mình
 
 ### Phía quản trị
+
 - [ ] Django Admin: quản lý sản phẩm, đơn hàng, khách hàng
-- [ ] Cập nhật trạng thái đơn hàng
+- [ ] Cập nhật trạng thái đơn hàng (bulk action)
 
 ### Kỹ thuật
+
 - [ ] Responsive + Mobile-first
 - [ ] Basic SEO (metadata, sitemap, Open Graph)
 - [ ] Docker Compose cho local dev
 - [ ] Deploy lên Vercel + Railway
+- [ ] Error handling nhất quán (API errors → toast, crash → error boundary)
 
 ### Phase 2 (sau MVP — không làm ngay)
 > Ghi vào đây, không động vào trong tháng này:
+- Tích hợp VNPAY / Momo / ZaloPay
 - Đánh giá sản phẩm (reviews)
 - Mã giảm giá / voucher
 - Flash sale
@@ -129,6 +134,27 @@ User (extend AbstractUser)
 - Deploy Django lên Railway
 - Test API bằng Swagger UI trên production
 
+**Gate cuối Tuần 1 — không chuyển sang Tuần 2 nếu chưa đạt:**
+- [ ] Swagger UI trên production URL trả đúng dữ liệu
+- [ ] `POST /api/auth/register/` + `login/` hoạt động trên production
+- [ ] `GET /api/products/` trả danh sách (dù chỉ 1–2 sản phẩm test)
+- [ ] Docker Compose local chạy được 3 services không lỗi
+
+**API Contract (cuối Tuần 1, trước khi FE bắt đầu):**
+
+Ghi lại response shape chính xác của các endpoint FE sẽ dùng:
+
+```yaml
+GET /api/products/        → { results: Product[], count, next, previous }
+GET /api/products/:slug/  → Product { id, name, slug, images, variants, price }
+POST /api/orders/         → Order { id, status, total }
+GET /api/orders/          → { results: Order[] }
+POST /api/auth/register/  → { access, refresh, user }
+POST /api/auth/login/     → { access, refresh, user }
+```
+
+FE không bắt đầu viết code gọi API nếu contract chưa được confirm.
+
 ---
 
 ### Tuần 2 — Frontend + Kết nối API (Ngày 8–14)
@@ -163,22 +189,39 @@ User (extend AbstractUser)
 **Ngày 15–17: Checkout Flow**
 - Checkout page với React Hook Form + Zod:
   - Bước 1: Địa chỉ giao hàng
-  - Bước 2: Phương thức thanh toán
+  - Bước 2: Phương thức thanh toán (COD)
   - Bước 3: Xác nhận đơn
-- API tạo đơn hàng (`POST /api/orders/`)
-- Validate tồn kho trước khi tạo đơn (race condition handling)
+- API tạo đơn hàng (`POST /api/orders/`) với atomic transaction:
+  ```python
+  from django.db import transaction
 
-**Ngày 18–19: Tích hợp VNPAY**
-- Đọc tài liệu VNPAY Sandbox chính thức
-- Implement `vnpay_create_payment_url()` trong Django view
-- Implement `vnpay_return_url` callback (verify chữ ký HMAC)
-- Cập nhật trạng thái Payment sau khi nhận callback
-- Test đầy đủ: thanh toán thành công, thất bại, hủy
+  with transaction.atomic():
+      variant = ProductVariant.objects.select_for_update().get(pk=variant_id)
+      if variant.stock_quantity < quantity:
+          raise ValidationError("Sản phẩm vừa hết hàng")
+      variant.stock_quantity -= quantity
+      variant.save()
+  ```
+- Error handling: retry logic cho DB timeout, rollback tồn kho khi lỗi
 
-**Ngày 20–21: Order Confirmation + Email**
+**Ngày 18–19: Order Confirmation + Email**
 - Trang `/orders/:id` — chi tiết đơn hàng
 - Gửi email xác nhận đơn qua Django (HTML template)
 - Trang lịch sử đơn hàng của khách (`/account/orders`)
+- Error boundary cho checkout page — hiển thị lỗi thân thiện thay vì crash
+
+**Ngày 20–21: COD Flow hoàn chỉnh + Django Admin nâng cao**
+- Luồng COD: tạo order → status `PENDING` → redirect trang success → gửi email
+- Trang `/checkout/success` và `/checkout/failed`
+- Custom action trong Admin: xác nhận / đánh dấu đang giao / hủy đơn hàng hàng loạt
+- Dashboard đơn giản trong Admin: đơn hôm nay, doanh thu hôm nay, sản phẩm sắp hết hàng
+
+**Gate cuối Tuần 3 — không chuyển sang Tuần 4 nếu chưa đạt:**
+
+- [ ] Luồng COD end-to-end chạy thông suốt (đặt hàng → email → xem đơn)
+- [ ] Email xác nhận gửi được thật (không chỉ log)
+- [ ] Admin có thể cập nhật trạng thái đơn hàng
+- [ ] Không có lỗi 500 trong Sentry sau khi test
 
 ---
 
@@ -186,12 +229,13 @@ User (extend AbstractUser)
 
 **Ngày 22–24: Testing**
 - **Backend (pytest-django):**
-  - Test tạo đơn hàng (happy path + edge cases)
-  - Test VNPAY callback verification
-  - Test kiểm tra tồn kho
+  - Test tạo đơn hàng COD (happy path + edge cases)
+  - Test kiểm tra tồn kho + race condition (`select_for_update`)
+  - Test hủy đơn → rollback tồn kho đúng số lượng
+  - Test auth: register, login, refresh token, logout blacklist
 - **Frontend E2E (Playwright):**
-  - Luồng: vào web → tìm sản phẩm → thêm giỏ → checkout → thanh toán
-  - Luồng: đăng ký tài khoản mới
+  - Luồng: vào web → tìm sản phẩm → thêm giỏ → checkout COD → nhận email
+  - Luồng: đăng ký tài khoản mới → đăng nhập → xem lịch sử đơn
 
 **Ngày 25–26: SEO & Performance**
 - `generateMetadata()` cho tất cả trang sản phẩm / danh mục
@@ -205,7 +249,7 @@ User (extend AbstractUser)
 - GitHub Actions: test → build → deploy tự động khi push `main`
 - Cài domain + SSL (Vercel tự xử lý SSL)
 - Sentry DSN cấu hình cho cả FE lẫn BE
-- Test end-to-end trên production với VNPAY sandbox
+- Test end-to-end toàn bộ luồng COD trên production (điện thoại thật)
 
 **Ngày 29–30: Final Check & Launch**
 - Test toàn bộ luồng mua hàng trên production (điện thoại thật)
@@ -220,7 +264,7 @@ User (extend AbstractUser)
 
 ```
 ✅ Website live trên domain thật
-✅ Khách vào → tìm sản phẩm → thêm giỏ → thanh toán VNPAY
+✅ Khách vào → tìm sản phẩm → thêm giỏ → đặt hàng COD
 ✅ Đơn hàng xuất hiện trong Django Admin
 ✅ Khách nhận email xác nhận
 ✅ Bạn có thể bán 10–20 sản phẩm thật ngay tuần đầu
@@ -262,12 +306,14 @@ User (extend AbstractUser)
 - [ ] Sanitize input trước khi render (tránh XSS)
 
 ### Database
+
 - [ ] Backup tự động trên Neon (bật trong dashboard)
 - [ ] Không dùng `root` user để kết nối app
 
-### Payment
-- [ ] Verify chữ ký HMAC của VNPAY callback (không tin vào query params)
-- [ ] Idempotency: không xử lý 1 callback 2 lần
+### COD / Payment
+
+- [ ] Idempotency: không xử lý 1 đơn hàng 2 lần (check trạng thái trước khi confirm)
+- [ ] Race condition: dùng `select_for_update()` khi trừ tồn kho
 
 ---
 

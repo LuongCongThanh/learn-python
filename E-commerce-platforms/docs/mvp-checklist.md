@@ -10,6 +10,7 @@
 ### Ngày 1 — Project Setup
 
 #### Repository & Cấu trúc thư mục
+
 - [ ] Tạo GitHub repository (private hoặc public)
 - [ ] Tạo cấu trúc thư mục:
   ```
@@ -25,6 +26,7 @@
 - [ ] Commit initial structure lên GitHub
 
 #### Docker Compose
+
 - [ ] Viết `docker-compose.yml` với 3 services: `db` (Postgres), `backend` (Django), `frontend` (Next.js)
 - [ ] Test `docker compose up` chạy được không lỗi
 - [ ] Verify các service kết nối được nhau (backend ping được db)
@@ -34,6 +36,7 @@
 ### Ngày 2 — Django Project Init
 
 #### Cài đặt Django
+
 - [ ] Tạo virtual environment (`python -m venv venv`)
 - [ ] Cài đặt dependencies:
   ```
@@ -64,6 +67,7 @@
 - [ ] Tạo superuser
 
 #### Next.js Project Init
+
 - [ ] Khởi tạo project: `npx create-next-app@latest frontend --typescript --tailwind --app`
 - [ ] Cài đặt dependencies:
   ```
@@ -85,6 +89,7 @@
 ### Ngày 3 — Database Models
 
 #### App: accounts
+
 - [ ] Model `User` (extend `AbstractUser`):
   - `email` (unique, dùng làm username)
   - `phone_number`
@@ -96,6 +101,7 @@
   - `is_default`
 
 #### App: products
+
 - [ ] Model `Category`:
   - `name`, `slug`, `image`, `parent` (self FK — cho phép danh mục con)
   - `is_active`, `order`
@@ -116,6 +122,7 @@
   - `price_override` (nullable — override giá base nếu có)
 
 #### App: orders
+
 - [ ] Model `Order`:
   - `user` (FK, nullable — guest checkout để phase 2)
   - `status`: `PENDING / CONFIRMED / SHIPPING / COMPLETED / CANCELLED`
@@ -129,17 +136,25 @@
   - `quantity`, `unit_price`
 
 #### App: payments
+
 - [ ] Model `Payment`:
   - `order` (OneToOne FK)
-  - `method`: `VNPAY / COD`
-  - `status`: `PENDING / SUCCESS / FAILED / REFUNDED`
-  - `transaction_id` (từ VNPAY)
+  - `method`: `COD` (MVP) — thiết kế để dễ thêm `VNPAY / MOMO` ở Phase 2
+  - `status`: `PENDING / CONFIRMED / CANCELLED / REFUNDED`
   - `amount`
-  - `paid_at`
-  - `raw_response` (JSON — lưu toàn bộ response VNPAY để debug)
+  - `confirmed_at`
+  - `note` (ghi chú nội bộ)
 
 - [ ] Viết và chạy migrations cho tất cả models
 - [ ] Verify schema trong database (dùng pgAdmin hoặc `dbshell`)
+
+#### Database Indexes (tạo ngay khi migrate)
+
+- [ ] `Product.slug` — unique index (dùng cho SSR trang chi tiết)
+- [ ] `Order.user_id + created_at` — composite index (trang lịch sử đơn hàng)
+- [ ] `ProductVariant.product_id` — FK index (query biến thể theo sản phẩm)
+- [ ] `OrderItem.order_id` — FK index (load items theo đơn)
+- [ ] `Category.slug` — unique index (dùng cho trang danh mục)
 
 ---
 
@@ -213,6 +228,13 @@
 - [ ] Tạo superuser trên production
 - [ ] Test Swagger UI trên URL production
 - [ ] Test đăng ký + đăng nhập trên production API
+
+#### Gate cuối Tuần 1 — không bắt đầu Tuần 2 nếu chưa đạt
+
+- [ ] `GET /api/products/` trả đúng dữ liệu trên production URL
+- [ ] `POST /api/auth/login/` trả access + refresh token
+- [ ] Docker Compose local chạy 3 services không lỗi
+- [ ] API Contract đã được ghi lại (response shape của 6 endpoints chính)
 
 ---
 
@@ -334,6 +356,21 @@
 - [ ] Code review: xóa console.log, TODO cũ, code thừa
 - [ ] Commit + push toàn bộ lên GitHub
 
+#### Gate cuối Tuần 2 — không bắt đầu Tuần 3 nếu chưa đạt
+
+- [ ] Luồng xem sản phẩm → thêm giỏ → xem giỏ chạy thông suốt
+- [ ] Đăng ký / đăng nhập / đăng xuất hoạt động đúng
+- [ ] JWT auto-refresh khi token hết hạn (test bằng cách set expiry ngắn)
+- [ ] Không có lỗi TypeScript khi build (`tsc --noEmit` pass)
+
+#### Acceptance Criteria mẫu — Auth
+
+> - ✅ Đăng ký email mới → nhận token → redirect trang chủ
+> - ✅ Đăng ký email đã tồn tại → hiển thị lỗi inline "Email đã được sử dụng"
+> - ✅ Đăng nhập đúng → lưu token → redirect về trang trước đó
+> - ✅ Đăng nhập sai mật khẩu → hiển thị lỗi, không redirect
+> - ✅ Token hết hạn → auto refresh 1 lần → nếu refresh fail → redirect login
+
 ---
 
 ## TUẦN 3 — Checkout & Thanh toán (Ngày 15–21)
@@ -367,53 +404,53 @@
     - [ ] Danh sách sản phẩm (readonly)
     - [ ] Tóm tắt chi phí: tạm tính + phí vận chuyển + tổng
   - [ ] Bước 3 — Chọn thanh toán:
-    - [ ] COD
-    - [ ] VNPAY
+    - [ ] COD (MVP — duy nhất)
   - [ ] Nút "Đặt hàng" → gọi `POST /api/orders/`
 - [ ] Validation toàn bộ form với Zod
 - [ ] Hiển thị lỗi "hết hàng" nếu API trả về lỗi tồn kho
+- [ ] Disable nút "Đặt hàng" sau khi submit (tránh double-submit)
 
 ---
 
-### Ngày 17 — Tích hợp VNPAY (Backend)
+### Ngày 17 — COD Flow + Error Handling
 
-- [ ] Đọc tài liệu VNPAY Sandbox (vnpay.vn/developer)
-- [ ] Đăng ký tài khoản VNPAY Sandbox, lấy `vnp_TmnCode` + `vnp_HashSecret`
-- [ ] Implement hàm `create_vnpay_payment_url()`:
-  - Build query params đúng theo spec VNPAY
-  - Ký HMAC-SHA512 với `vnp_HashSecret`
-  - Trả về redirect URL
-- [ ] API `POST /api/payments/vnpay/create/`:
-  - Nhận `order_id`
-  - Gọi `create_vnpay_payment_url()`
-  - Trả về payment URL cho frontend redirect
-- [ ] Implement `VNPayReturnView` (GET `/api/payments/vnpay/return/`):
-  - Verify chữ ký HMAC của callback
-  - Kiểm tra `vnp_ResponseCode == "00"` → thanh toán thành công
-  - Cập nhật `Payment.status = SUCCESS`
-  - Cập nhật `Order.status = CONFIRMED`
-  - Redirect frontend đến trang thành công/thất bại
-- [ ] Implement `VNPayIPNView` (GET `/api/payments/vnpay/ipn/`):
-  - Server-to-server callback từ VNPAY (quan trọng hơn return URL)
-  - Verify chữ ký
-  - Idempotency: không xử lý 2 lần cùng transaction
-  - Trả về `{"RspCode": "00", "Message": "Confirm Success"}`
+- [ ] Luồng COD hoàn chỉnh (backend):
+  - [ ] `POST /api/orders/` tạo `Order` (PENDING) + `Payment` (method=COD, status=PENDING)
+  - [ ] Atomic transaction + `select_for_update()` khi trừ tồn kho:
+
+    ```python
+    with transaction.atomic():
+        variant = ProductVariant.objects.select_for_update().get(pk=variant_id)
+        if variant.stock_quantity < quantity:
+            raise ValidationError("Sản phẩm vừa hết hàng")
+        variant.stock_quantity -= quantity
+        variant.save()
+    ```
+
+  - [ ] Idempotency: kiểm tra đơn không bị tạo 2 lần nếu user submit liên tiếp
+- [ ] Custom DRF exception handler — mọi lỗi đều trả JSON chuẩn:
+
+  ```python
+  # {"error": "...", "code": "out_of_stock", "status": 400}
+  ```
+- [ ] Phân biệt HTTP status: 400 validation, 401/403 auth, 404 not found, 409 conflict (hết hàng), 500 server
+- [ ] Sentry tự động bắt lỗi 500 (cấu hình `sentry_sdk.init` trong Django settings)
+- [ ] Test: 2 request đồng thời mua sản phẩm cuối → chỉ 1 thành công, 1 nhận lỗi 409
 
 ---
 
-### Ngày 18 — Tích hợp VNPAY (Frontend) & COD
+### Ngày 18 — COD Frontend + Trang xác nhận
 
-- [ ] Sau khi tạo order với VNPAY → gọi `POST /api/payments/vnpay/create/`
-- [ ] Redirect người dùng sang trang thanh toán VNPAY
 - [ ] Trang `/checkout/success?orderId=`:
-  - [ ] Hiển thị thông tin đơn hàng vừa đặt
+  - [ ] Fetch và hiển thị thông tin đơn hàng vừa đặt (tên, địa chỉ, tổng tiền)
   - [ ] Nút "Xem đơn hàng" và "Tiếp tục mua sắm"
-  - [ ] Clear giỏ hàng sau khi đặt thành công
+  - [ ] Clear Zustand cart store sau khi đặt thành công
+  - [ ] Redirect về trang chủ nếu vào URL này mà không có orderId
 - [ ] Trang `/checkout/failed`:
-  - [ ] Thông báo lỗi
-  - [ ] Nút thử lại thanh toán
-- [ ] Luồng COD: tạo order → status PENDING → redirect success ngay
-- [ ] Test đầy đủ VNPAY sandbox: thành công, thất bại, hủy giữa chừng
+  - [ ] Thông báo lỗi rõ ràng (hết hàng / lỗi server)
+  - [ ] Nút "Thử lại" → quay về checkout
+- [ ] Error boundary bọc toàn bộ checkout flow
+- [ ] Toast notification cho lỗi API (network error, server error)
 
 ---
 
@@ -456,15 +493,31 @@
 - [ ] Test end-to-end luồng hoàn chỉnh (thủ công):
   1. Vào web → tìm sản phẩm → xem chi tiết
   2. Thêm vào giỏ → vào checkout
-  3. Nhập địa chỉ → chọn VNPAY → đặt hàng
-  4. Thanh toán sandbox VNPAY → quay về trang success
-  5. Nhận email xác nhận
-  6. Vào `/account/orders` xem đơn
-  7. Admin xác nhận đơn → cập nhật trạng thái
-- [ ] Test luồng COD tương tự
-- [ ] Test hủy đơn hàng
+  3. Nhập địa chỉ → chọn COD → đặt hàng
+  4. Quay về trang success → nhận email xác nhận
+  5. Vào `/account/orders` xem đơn
+  6. Admin xác nhận đơn → cập nhật trạng thái
+- [ ] Test hủy đơn hàng → tồn kho hoàn lại đúng
 - [ ] Verify không có N+1 query nghiêm trọng (Django Debug Toolbar)
 - [ ] Commit + push
+
+#### Gate cuối Tuần 3 — không bắt đầu Tuần 4 nếu chưa đạt
+
+- [ ] Luồng COD end-to-end chạy thông suốt trên môi trường local
+- [ ] Email xác nhận gửi được thật (không chỉ console log)
+- [ ] Admin cập nhật được trạng thái đơn hàng
+- [ ] Không có lỗi 500 nào trong Sentry sau khi chạy test thủ công
+
+#### Acceptance Criteria mẫu — Checkout COD
+
+> Dùng để xác nhận feature "done" trước khi chuyển sang Tuần 4:
+>
+> - ✅ Khách đăng nhập → vào checkout → điền địa chỉ → chọn COD → nhấn Đặt hàng
+> - ✅ Trang success hiển thị mã đơn và thông tin đơn hàng
+> - ✅ Email xác nhận được gửi đến địa chỉ email của khách (kiểm tra inbox thật)
+> - ✅ Đơn hàng xuất hiện trong Django Admin với status `PENDING`
+> - ✅ Tồn kho giảm đúng số lượng đã đặt
+> - ❌ Nếu sản phẩm hết hàng → hiển thị thông báo lỗi, không tạo đơn
 
 ---
 
@@ -518,8 +571,8 @@
   - [ ] Cập nhật số lượng trong giỏ
   - [ ] Xóa sản phẩm khỏi giỏ
 - [ ] Test file: `e2e/checkout.spec.ts`
-  - [ ] Checkout COD hoàn chỉnh (đặt hàng → trang success)
-  - [ ] Redirect sang VNPAY khi chọn VNPAY
+  - [ ] Checkout COD hoàn chỉnh (đặt hàng → trang success → nhận email)
+  - [ ] Hiển thị lỗi khi sản phẩm hết hàng trong lúc checkout
   - [ ] Không thể checkout khi chưa đăng nhập (redirect login)
 - [ ] Chạy toàn bộ E2E tests pass
 
@@ -543,6 +596,12 @@
 - [ ] Lighthouse audit:
   - [ ] Trang chủ: Performance > 75, SEO > 90 (mobile)
   - [ ] Trang chi tiết sản phẩm: Performance > 80
+  - [ ] Nếu score < 75: kiểm tra LCP (ảnh banner), CLS (font/image), FID (JS blocking)
+- [ ] Accessibility baseline (tối thiểu trước launch):
+  - [ ] Tất cả `<img>` có `alt` mô tả sản phẩm (không để trống hoặc "image")
+  - [ ] Tất cả button/link có label rõ ràng (không chỉ dùng icon đơn thuần)
+  - [ ] Color contrast đủ 4.5:1 cho text trên nền (dùng Chrome DevTools → Accessibility)
+  - [ ] Focus visible trên keyboard navigation (tab qua form checkout)
 
 ---
 
@@ -618,9 +677,6 @@
     - `X-Frame-Options: DENY`
     - `X-Content-Type-Options: nosniff`
     - `Referrer-Policy: strict-origin-when-cross-origin`
-- [ ] VNPAY:
-  - [ ] Verify chữ ký trên cả return URL lẫn IPN
-  - [ ] Không dùng `vnp_HashSecret` ở frontend
 - [ ] Chạy `pip-audit` để kiểm tra dependency vulnerabilities
 
 ---
@@ -628,10 +684,10 @@
 ### Ngày 28 — End-to-End Production Test
 
 - [ ] Test toàn bộ luồng trên production (điện thoại thật, không dùng localhost):
-  - [ ] Luồng 1: Khách mới → đăng ký → mua hàng COD → nhận email
-  - [ ] Luồng 2: Đăng nhập → tìm kiếm → lọc → mua → thanh toán VNPAY sandbox → nhận email
+  - [ ] Luồng 1: Khách mới → đăng ký → mua hàng COD → nhận email xác nhận
+  - [ ] Luồng 2: Đăng nhập → tìm kiếm → lọc → thêm giỏ → checkout COD → nhận email
   - [ ] Luồng 3: Admin xác nhận đơn → cập nhật trạng thái → khách xem đơn
-  - [ ] Luồng 4: Hủy đơn hàng → tồn kho được hoàn lại
+  - [ ] Luồng 4: Hủy đơn hàng → tồn kho hoàn lại đúng số lượng
 - [ ] Test trên nhiều thiết bị / trình duyệt:
   - [ ] Chrome (desktop + mobile)
   - [ ] Safari (iOS)
@@ -649,6 +705,16 @@
   - [ ] Danh mục đúng
   - [ ] Tồn kho thực tế
 - [ ] Kiểm tra hiển thị sản phẩm trên web
+
+#### UI Review trước launch (dùng điện thoại thật + Chrome desktop)
+
+- [ ] Spacing và alignment nhất quán giữa trang chủ, danh mục, chi tiết sản phẩm
+- [ ] Loading skeleton hiển thị đúng khi fetch chậm (throttle Network → Slow 3G)
+- [ ] Empty state hiển thị khi: giỏ hàng trống, không tìm thấy sản phẩm, chưa có đơn hàng
+- [ ] Error state hiển thị khi: API lỗi (tắt backend thử), hết hàng khi checkout
+- [ ] Breakpoint 375px (iPhone SE) — không bị overflow ngang, text không bị cắt
+- [ ] Toast notification hiển thị đúng vị trí (không che nút hành động)
+
 - [ ] Viết `README.md` đầy đủ:
   - [ ] Mô tả dự án
   - [ ] Tech stack
@@ -676,10 +742,12 @@
 
 > Không động vào những thứ này cho đến khi MVP live và có người dùng thật.
 
+- [ ] **Tích hợp VNPAY / Momo / ZaloPay** (payment gateway)
 - [ ] Đánh giá & Review sản phẩm
 - [ ] Mã giảm giá / Voucher
 - [ ] Flash sale theo khung giờ
 - [ ] Wishlist
+- [ ] Đồng bộ giỏ hàng server-side (hiện tại mất khi đổi thiết bị)
 - [ ] Tích hợp GHN / GHTK thật (tính phí realtime)
 - [ ] Báo cáo doanh thu (biểu đồ, xuất Excel)
 - [ ] Social login (Google / Facebook)
@@ -693,5 +761,5 @@
 
 ---
 
-*Xem tổng quan chức năng: [overview.md](./overview.md)*
-*Xem chi tiết tech stack & timeline: [mvp-plan.md](./mvp-plan.md)*
+_Xem tổng quan chức năng: [overview.md](./overview.md)_
+_Xem chi tiết tech stack & timeline: [mvp-plan.md](./mvp-plan.md)_
